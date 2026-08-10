@@ -1,61 +1,77 @@
-# TW Smart Collections
+# WordPress Plugins
 
-Shopify-style smart collections for WooCommerce. Define condition rules and products
-auto-assign to a category — with real archive URLs, menus and counts (physical assignment).
+This repository is a source monorepo containing **independent WordPress
+plugins**. Each plugin is self-contained and installed separately — this
+repo is not itself a single installable plugin.
 
-## Install
+## Plugins
 
-1. Zip the `tw-smart-collections` folder (or upload the folder to `wp-content/plugins/`).
-2. In WP admin → **Plugins**, activate **TW Smart Collections**.
-3. Go to **Products → Smart Collections**.
+| Plugin | Location | What it does | Docs |
+|---|---|---|---|
+| **TW Smart Collections** | [`tw-smart-collections/`](tw-smart-collections/tw-smart-collections.php) | Shopify-style smart collections for WooCommerce — define condition rules (price, stock, tag, brand, etc.) and matching products are auto-assigned to a real product category. | [docs/tw-smart-collections.md](docs/tw-smart-collections.md) |
+| **TargetWeb** | [`targetweb/`](targetweb/README.md) | Modular plugin for TargetWeb's WooCommerce integrations. Currently ships a "Request Information" lead-form module; built to grow via additional self-contained modules. | [targetweb/README.md](targetweb/README.md) |
 
-## Create a collection
+Both plugins are self-contained folders — each one is a complete, installable
+WordPress plugin with its own bootstrap file, and each has its own copy of
+the update checker library (see [Automatic updates](#automatic-updates-via-github)
+below).
 
-1. **Add New**.
-2. Name it, pick the **target category** (matching products land here).
-3. Choose **ALL (AND)** or **ANY (OR)**.
-4. Add conditions. Full Shopify-equivalent attribute set is supported:
+## Installing a plugin from this repo
 
-| Condition | Maps to in WooCommerce |
-|---|---|
-| Category | `product_cat` term |
-| Vendor / Brand | `product_brand` term |
-| Tag | `product_tag` term |
-| Price | active price (`get_price`) |
-| Compare at price | regular price (`get_regular_price`) |
-| Inventory stock | stock quantity |
-| Weight | product weight |
-| Title | product name |
-| Variant title | variation attribute values (variable products) |
-| Status | Active / Draft / Pending / Private |
-| Type | Simple / Variable / Grouped / External |
+Each plugin has its own install steps in its docs (linked above), but in general:
 
-For Category / Vendor / Tag, enter the term **name or slug** (e.g. `husqvarna`).
+1. **TW Smart Collections** — copy/zip the entire `tw-smart-collections/`
+   folder into `wp-content/plugins/` and activate it.
+2. **TargetWeb** — copy/zip the entire `targetweb/` folder into
+   `wp-content/plugins/` and activate it; its modules (e.g. Lead Form) load
+   automatically.
 
-5. Save — the whole catalog is evaluated immediately.
+## Automatic updates via GitHub
 
-## How membership stays current
+Both plugins self-update straight from this repo's GitHub Releases, using the
+[plugin-update-checker](https://github.com/YahnisElsts/plugin-update-checker)
+library — no WordPress.org listing needed. Once installed, each plugin shows
+the normal WP-Admin "update available" notice and one-click update on the
+**Plugins** page, just like a WordPress.org plugin.
 
-- **On product save** — that product is re-evaluated (`woocommerce_update_product` / `_new_product`).
-- **Hourly cron** — the full catalog is re-evaluated, so changes made outside a normal
-  save (price synced by your import, stock hitting zero) get caught.
-- **Re-evaluate all now** — a button on the list screen to force a full sync on demand.
+### How it works
 
-## Safe removal
+- This is a monorepo with **two plugins**, so a single tag/release covers
+  both. Each plugin vendors its own copy of `plugin-update-checker` at
+  `<plugin>/vendor/plugin-update-checker/` and only watches for its **own**
+  release asset (`tw-smart-collections.zip` / `targetweb.zip`), so the two
+  plugins update independently even though they share one release.
+- `.github/workflows/release.yml` builds both ZIPs and attaches them to a
+  GitHub Release automatically whenever a `v*` tag is pushed.
 
-The plugin tracks (per product) only the categories **it** assigned. If a product stops
-matching a rule, it's removed **only** from plugin-managed categories — manual category
-assignments are never touched.
+### Releasing a new version
 
-## Import pipeline note
+1. Bump the `Version` header in the plugin file(s) you changed (also bump
+   `TW_VERSION` in `targetweb/targetweb.php` if that's the one you touched).
+2. Commit to `main`.
+3. Tag and push:
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+4. GitHub Actions builds `tw-smart-collections.zip` and `targetweb.zip` and
+   publishes them on a new GitHub Release for that tag — nothing else to do.
+5. Sites running these plugins pick up the update within ~12 hours
+   automatically, or immediately if you force a check (see each plugin's docs
+   for testing steps).
 
-If your supplier import writes products via WooCommerce (firing `woocommerce_new_product` /
-`_update_product`), rules apply automatically on each import. If it writes directly to the
-DB, run **Re-evaluate all now** or rely on the hourly cron afterward.
+Since one tag covers both plugins, keep it simple: bump **both** plugins'
+version numbers together (even the one that didn't change) so their local
+headers never fall behind the shared tag — otherwise WordPress can keep
+re-offering the "same" update forever.
 
-## Notes / limits (v1)
+## Adding a new plugin to this repo
 
-- "Type" maps to the WooCommerce product type (simple/variable/…), not a Shopify-style
-  merchandising type field. Use **Category** for merchandising groups.
-- Real cron requires site traffic (WP-Cron) or a system cron hitting `wp-cron.php`.
-- Deleting a smart collection removes the rule only; the category term is kept.
+Give it its own top-level folder (mirroring `targetweb/`) with its own
+`README.md`, then add a row to the table above so it's easy to find. Plugins
+in this repo don't share code with each other — if functionality needs to be
+shared, prefer building it as a module inside `targetweb/` instead of a new
+top-level plugin (see [targetweb/README.md](targetweb/README.md) for the
+module conventions). If it should also self-update from GitHub, vendor
+`plugin-update-checker` into it the same way and add it to
+`.github/workflows/release.yml`.

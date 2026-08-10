@@ -1,0 +1,52 @@
+name: Release plugin ZIPs
+
+# Publishes one GitHub Release per pushed tag (v*), with one ZIP asset per
+# plugin in this monorepo attached to it. Each plugin's PHP code
+# (plugin-update-checker) watches for its own asset by name, so both plugins
+# can be updated independently even though they share one repo/release.
+#
+# How to cut a release:
+#   1. Bump the "Version" header in the plugin(s) you changed.
+#   2. Commit the change(s) to main.
+#   3. git tag vX.Y.Z && git push origin vX.Y.Z
+# This workflow then builds tw-smart-collections.zip and targetweb.zip and
+# attaches both to the new GitHub Release for that tag.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build tw-smart-collections.zip
+        run: |
+          mkdir -p build/tw-smart-collections
+          cp -r tw-smart-collections/. build/tw-smart-collections/
+          rm -rf build/tw-smart-collections/vendor/plugin-update-checker/.git
+          cd build
+          zip -r ../tw-smart-collections.zip tw-smart-collections
+
+      - name: Build targetweb.zip
+        run: |
+          mkdir -p build/targetweb
+          cp -r targetweb/. build/targetweb/
+          rm -rf build/targetweb/vendor/plugin-update-checker/.git
+          cd build
+          zip -r ../targetweb.zip targetweb
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            tw-smart-collections.zip
+            targetweb.zip
+          generate_release_notes: true

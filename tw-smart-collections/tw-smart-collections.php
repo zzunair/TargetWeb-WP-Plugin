@@ -2,10 +2,11 @@
 /**
  * Plugin Name: TW Smart Collections
  * Description: Shopify-style smart collections for WooCommerce. Define condition rules (price, stock, tag, brand, etc.) and products are auto-assigned to a category. Membership is kept current via product-save hooks and a scheduled cron re-evaluation.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Zivo Digitals
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
+ * Update URI: https://github.com/zzunair/TargetWeb-WP-Plugin
  *
  * MODEL: Physical assignment. Each rule set targets a real product_cat term.
  * Matching products are added to that term (so you get real archive URLs, menus,
@@ -15,6 +16,29 @@
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
+}
+
+/**
+ * Self-update via GitHub Releases, using the plugin-update-checker library
+ * (https://github.com/YahnisElsts/plugin-update-checker). This repo hosts more
+ * than one plugin, so releases are published with one ZIP asset per plugin —
+ * this instance only watches for the "tw-smart-collections.zip" asset.
+ *
+ * To ship an update: bump the "Version" header above, commit, then push a new
+ * tag (e.g. `git tag v1.2.0 && git push origin v1.2.0`). The repo's GitHub
+ * Actions workflow (.github/workflows/release.yml) builds the ZIP and attaches
+ * it to a GitHub Release automatically.
+ */
+if ( file_exists( __DIR__ . '/vendor/plugin-update-checker/plugin-update-checker.php' ) ) {
+	require_once __DIR__ . '/vendor/plugin-update-checker/plugin-update-checker.php';
+
+	$twsc_update_checker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+		'https://github.com/zzunair/TargetWeb-WP-Plugin/',
+		__FILE__,
+		'tw-smart-collections'
+	);
+	$twsc_update_checker->setBranch( 'main' );
+	$twsc_update_checker->getVcsApi()->enableReleaseAssets( '/^tw-smart-collections\.zip$/i' );
 }
 
 define( 'TWSC_OPTION', 'twsc_rulesets' );

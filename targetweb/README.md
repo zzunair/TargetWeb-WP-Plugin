@@ -16,6 +16,8 @@ the other modules or the plugin bootstrap.
 targetweb/
   targetweb.php              Plugin bootstrap — discovers & loads every module
   README.md                  This file
+  vendor/
+    plugin-update-checker/     Vendored library that powers self-updates from GitHub
   modules/
     lead-form/                "Request Information" lead capture modal (WooCommerce product pages)
       module.php               Module bootstrap
@@ -81,3 +83,11 @@ README for its setup steps and configuration.
 2. Activate **TargetWeb** in WP Admin → Plugins.
 3. Configure each module from its own admin page — see the module table
    above for links to their docs.
+
+## Updates
+
+This plugin self-updates from this repo's GitHub Releases (see the root
+[README.md](../README.md#automatic-updates-via-github) for how releases are
+published, and how to bump the version and cut a new one). Once installed
+from a release ZIP, WP-Admin → **Plugins** will show a normal "update
+available" notice whenever a new tag is released.
