@@ -73,6 +73,7 @@ the lead-form module).
 | Module | Folder | What it does |
 |---|---|---|
 | Lead Form | [`modules/lead-form/`](modules/lead-form/README.md) | "Request Information" modal + form on WooCommerce single product pages, submitting to the TargetWeb CRM API (`GetDmsSetupId` / `GetDmsSetupLocations` / `AddCustomerQuotation`). Replaces the theme's old third-party `targetWeb.js` / `displayQuotationForm()` flow. |
+| Parts Portal | [`modules/parts-portal/`](modules/parts-portal/README.md) | Exposes `POST /wp-json/targetweb/v1/parts-portal/sync`, which TargetWeb calls directly (on Save/Enable) to create/update or hide a "Part Finder" Page + main-menu link, plus the `[tw_parts_portal]` shortcode's add-to-cart/resize/scroll script (the WooCommerce Store API equivalent of the Shopify theme's `targetWeb.js`). No configuration, no cron - same `Site-Url` self-check pattern as the TargetWeb Locations plugin's `/locations` endpoint. |
 
 More modules will be added here as they're built — see each module's own
 README for its setup steps and configuration.
