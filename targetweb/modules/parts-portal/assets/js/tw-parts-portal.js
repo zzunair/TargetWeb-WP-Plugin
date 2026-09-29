@@ -66,6 +66,31 @@
 		});
 	}
 
+	function refreshCartFragments() {
+		var fragmentsUrl = window.twPartsConfig && window.twPartsConfig.cartFragmentsUrl;
+		if (!fragmentsUrl) {
+			return;
+		}
+
+		fetch(fragmentsUrl, { method: 'POST', credentials: 'same-origin' })
+			.then(function (response) {
+				return response.json();
+			})
+			.then(function (data) {
+				if (!data || !data.fragments) {
+					return;
+				}
+				Object.keys(data.fragments).forEach(function (selector) {
+					document.querySelectorAll(selector).forEach(function (el) {
+						el.outerHTML = data.fragments[selector];
+					});
+				});
+			})
+			.catch(function (error) {
+				console.error('TargetWeb Parts Portal: cart fragment refresh failed', error);
+			});
+	}
+
 	function addToWooCommerceCart(productId, iframe, frameOrigin) {
 		var addUrl = (window.twPartsConfig && window.twPartsConfig.addItemUrl) || '/wp-json/wc/store/v1/cart/add-item';
 
@@ -89,11 +114,7 @@
 					return;
 				}
 
-				// Refresh the classic mini-cart widget/fragments if the theme uses them.
-				if (window.jQuery) {
-					window.jQuery(document.body).trigger('added_to_cart', [null, null, null]);
-					window.jQuery(document.body).trigger('wc_fragment_refresh');
-				}
+				refreshCartFragments();
 
 				if (iframe && iframe.contentWindow && frameOrigin) {
 					iframe.contentWindow.postMessage(
