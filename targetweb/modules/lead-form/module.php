@@ -2,8 +2,8 @@
 /**
  * Module: Lead Form ("Request Information")
  *
- * Standalone "Request Information" lead capture modal for WooCommerce single
- * product pages. Replaces the theme's third-party targetWeb.js /
+ * Standalone "Request Information" lead capture modal for the homepage,
+ * product pages, or any public page. Replaces the theme's third-party targetWeb.js /
  * displayQuotationForm() flow with a module-owned form, environment-aware
  * endpoint configuration, and a WordPress AJAX submit handler.
  *
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TW_CRM_VERSION', '1.0.0' );
+define( 'TW_CRM_VERSION', '1.4.0' );
 define( 'TW_CRM_FILE', __FILE__ );
 define( 'TW_CRM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TW_CRM_URL', plugin_dir_url( __FILE__ ) );
@@ -33,6 +33,15 @@ define( 'TW_CRM_URL', plugin_dir_url( __FILE__ ) );
 define( 'TW_CRM_OPTION', 'tw_crm_settings' );
 define( 'TW_CRM_NONCE_ACTION', 'tw_crm_lead_form' );
 define( 'TW_CRM_AJAX_ACTION', 'tw_crm_submit_lead' );
+
+/** Put this id on any theme button to open the Request Information form. */
+define( 'TW_CRM_TRIGGER_ID', 'tw-request-info-btn' );
+/** Theme-owned modal shell (used when Modal source = Theme modal). */
+define( 'TW_CRM_THEME_MODAL_ID', 'tw-crm-popup' );
+/** Plugin-owned modal shell (used when Modal source = Plugin modal). */
+define( 'TW_CRM_PLUGIN_MODAL_ID', 'tw-crm-app-popup' );
+/** Where the form is injected inside a theme modal. */
+define( 'TW_CRM_FORM_MOUNT_ID', 'leads-form-div' );
 
 /** Supported environments, in display order. */
 define( 'TW_CRM_ENVIRONMENTS', array( 'dev', 'qa', 'staging', 'production' ) );
@@ -44,30 +53,17 @@ require_once TW_CRM_DIR . 'includes/class-tw-crm-frontend.php';
 require_once TW_CRM_DIR . 'includes/class-tw-crm-ajax.php';
 
 /**
- * Boot the plugin once all plugins are loaded (so we can soft-detect WooCommerce).
+ * Boot the module. WooCommerce is optional — the form also works on the
+ * homepage and other non-product pages (product ID is included only when
+ * a real product is available).
  */
 function tw_crm_init() {
+	delete_option( 'tw_crm_submit_log' );
 	TW_CRM_Settings::init();
 	TW_CRM_Ajax::init();
-
-	// Soft dependency on WooCommerce: only wire frontend behavior if Woo is active.
-	if ( class_exists( 'WooCommerce' ) ) {
-		TW_CRM_Frontend::init();
-	} else {
-		add_action( 'admin_notices', 'tw_crm_missing_woocommerce_notice' );
-	}
+	TW_CRM_Frontend::init();
 }
 add_action( 'plugins_loaded', 'tw_crm_init' );
-
-/**
- * Admin notice when WooCommerce is not active.
- */
-function tw_crm_missing_woocommerce_notice() {
-	if ( ! current_user_can( 'activate_plugins' ) ) {
-		return;
-	}
-	echo '<div class="notice notice-warning"><p><strong>TargetWeb — Lead Form module</strong>: WooCommerce is not active. The Request Information button/modal only appears on WooCommerce product pages, so this module is currently inactive on the frontend.</p></div>';
-}
 
 /**
  * Set sensible defaults on activation (does not overwrite existing settings).

@@ -39,6 +39,8 @@ class TW_CRM_Settings {
 			'shop_domain'    => '',
 			'phone_required' => 0,
 			'debug_mode'     => 0,
+			'modal_source'       => 'plugin',
+			'default_product_id' => '',
 			'environments'   => array(
 				'dev'        => array( 'base_url' => '' ),
 				'qa'         => array( 'base_url' => '' ),
@@ -162,14 +164,74 @@ class TW_CRM_Settings {
 	}
 
 	/**
-	 * Add submenu under Products.
+	 * Product ID sent as AddCustomerQuotation.externalProductId.
+	 * The CRM requires this field and looks the product up — omitting it
+	 * causes a server-side NullReferenceException.
+	 *
+	 * @param WC_Product|null $product Product from the current request, if any.
+	 * @return string
+	 */
+	public static function resolve_external_product_id( $product = null ) {
+		if ( $product && is_object( $product ) && method_exists( $product, 'get_id' ) ) {
+			$id = (int) $product->get_id();
+			if ( $id > 0 ) {
+				return (string) $id;
+			}
+		}
+
+		$settings = self::get_settings();
+		$default  = isset( $settings['default_product_id'] ) ? trim( (string) $settings['default_product_id'] ) : '';
+		if ( '' !== $default ) {
+			return $default;
+		}
+
+		if ( function_exists( 'wc_get_products' ) ) {
+			$ids = wc_get_products(
+				array(
+					'limit'  => 1,
+					'status' => 'publish',
+					'return' => 'ids',
+				)
+			);
+			if ( ! empty( $ids[0] ) ) {
+				return (string) $ids[0];
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Capability required to manage this module.
+	 *
+	 * @return string
+	 */
+	public static function capability() {
+		return post_type_exists( 'product' ) ? 'manage_woocommerce' : 'manage_options';
+	}
+
+	/**
+	 * Add submenu under Products when WooCommerce is present, otherwise
+	 * under Settings (homepage-only themes often have no Products menu).
 	 */
 	public static function register_menu() {
-		add_submenu_page(
-			'edit.php?post_type=product',
+		$cap = self::capability();
+		if ( post_type_exists( 'product' ) ) {
+			add_submenu_page(
+				'edit.php?post_type=product',
+				'TargetWeb CRM',
+				'TargetWeb CRM',
+				$cap,
+				'tw-crm-settings',
+				array( __CLASS__, 'render_page' )
+			);
+			return;
+		}
+
+		add_options_page(
 			'TargetWeb CRM',
 			'TargetWeb CRM',
-			'manage_woocommerce',
+			$cap,
 			'tw-crm-settings',
 			array( __CLASS__, 'render_page' )
 		);
@@ -205,6 +267,13 @@ class TW_CRM_Settings {
 		$out['phone_required'] = ! empty( $input['phone_required'] ) ? 1 : 0;
 		$out['debug_mode']     = ! empty( $input['debug_mode'] ) ? 1 : 0;
 
+		$modal_source        = isset( $input['modal_source'] ) ? sanitize_key( $input['modal_source'] ) : 'plugin';
+		$out['modal_source'] = in_array( $modal_source, array( 'plugin', 'theme', 'inline' ), true ) ? $modal_source : 'plugin';
+
+		$out['default_product_id'] = isset( $input['default_product_id'] )
+			? sanitize_text_field( trim( (string) $input['default_product_id'] ) )
+			: '';
+
 		$env                = isset( $input['environment'] ) ? sanitize_key( $input['environment'] ) : 'dev';
 		$out['environment'] = in_array( $env, TW_CRM_ENVIRONMENTS, true ) ? $env : 'dev';
 
@@ -238,7 +307,7 @@ class TW_CRM_Settings {
 	 * Render settings page.
 	 */
 	public static function render_page() {
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! current_user_can( self::capability() ) ) {
 			return;
 		}
 
@@ -248,7 +317,7 @@ class TW_CRM_Settings {
 		?>
 		<div class="wrap">
 			<h1>TargetWeb CRM — Request Information Lead Form</h1>
-			<p>Configures the “Request Information” modal shown on WooCommerce product pages. Binds to the existing <code>#tw-request-info-btn</code> button — no theme changes required to get started.</p>
+			<p>Configures the “Request Information” modal on the homepage, product pages, or any public page that includes the trigger button. Binds to <code>#tw-request-info-btn</code> — no theme changes required if that id is already present.</p>
 
 			<div class="notice notice-info" style="padding:10px 12px;">
 				<p style="margin:0;">
@@ -280,7 +349,7 @@ class TW_CRM_Settings {
 						<td>
 							<label>
 								<input type="checkbox" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[enabled]" value="1" <?php checked( (int) $settings['enabled'], 1 ); ?>>
-								Enable the Request Information button/modal on product pages
+								Enable the Request Information button/modal on the frontend (homepage, product pages, and any other public page)
 							</label>
 						</td>
 					</tr>
@@ -309,6 +378,65 @@ class TW_CRM_Settings {
 						<th scope="row"><label for="tw_crm_cta_text">CTA button text</label></th>
 						<td>
 							<input type="text" class="regular-text" id="tw_crm_cta_text" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[cta_text]" value="<?php echo esc_attr( $settings['cta_text'] ); ?>">
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">Modal source</th>
+						<td>
+							<fieldset>
+								<label style="display:block;margin-bottom:6px;">
+									<input type="radio" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[modal_source]" value="plugin" <?php checked( $settings['modal_source'], 'plugin' ); ?>>
+									Use the <strong>plugin modal</strong> (built and styled by this plugin)
+								</label>
+								<label style="display:block;margin-bottom:6px;">
+									<input type="radio" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[modal_source]" value="theme" <?php checked( $settings['modal_source'], 'theme' ); ?>>
+									Use the <strong>theme</strong> (plugin injects the form; theme may show it as a modal <em>or</em> as a simple in-page form)
+								</label>
+								<label style="display:block;">
+									<input type="radio" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[modal_source]" value="inline" <?php checked( $settings['modal_source'], 'inline' ); ?>>
+									Force <strong>simple in-page form</strong> (never treat it as a popup)
+								</label>
+							</fieldset>
+							<div class="notice notice-info inline" style="margin:12px 0 0;padding:10px 12px;">
+								<p style="margin:0 0 8px;"><strong>Theme hook IDs</strong> — add these to any theme to link the form:</p>
+								<ol style="margin:0 0 0 1.3em;">
+									<li>
+										Put this id on the button that should open the form:
+										<code><?php echo esc_html( TW_CRM_TRIGGER_ID ); ?></code>
+										<pre style="background:#f6f7f7;padding:8px 10px;margin:6px 0 10px;overflow:auto;">&lt;button type="button" id="<?php echo esc_html( TW_CRM_TRIGGER_ID ); ?>" data-product-id="123"&gt;Request Information&lt;/button&gt;</pre>
+									</li>
+									<li>
+										Optional: any element with <code>data-tw-crm-open</code> also opens the form (useful if you already used the id elsewhere).
+									</li>
+									<li>
+										<strong>Theme modal:</strong> keep the button above, plus this popup shell:
+										<pre style="background:#f6f7f7;padding:8px 10px;margin:6px 0 10px;overflow:auto;">&lt;div id="<?php echo esc_html( TW_CRM_THEME_MODAL_ID ); ?>"&gt;
+  &lt;div id="<?php echo esc_html( TW_CRM_FORM_MOUNT_ID ); ?>"&gt;&lt;/div&gt;
+&lt;/div&gt;</pre>
+									</li>
+									<li>
+										<strong>Simple in-page form</strong> (no popup — Lead-Gen-1 style): omit the button and add <code>data-tw-crm-inline</code>:
+										<pre style="background:#f6f7f7;padding:8px 10px;margin:6px 0 0;overflow:auto;">&lt;div id="<?php echo esc_html( TW_CRM_THEME_MODAL_ID ); ?>" data-tw-crm-inline&gt;
+  &lt;div id="<?php echo esc_html( TW_CRM_FORM_MOUNT_ID ); ?>"&gt;&lt;/div&gt;
+&lt;/div&gt;</pre>
+										Or output it with <code>[tw_crm_lead_form]</code> / <code>do_action('tw_crm_render_form')</code>.
+										If there is no trigger button, the plugin auto-detects the simple form.
+									</li>
+								</ol>
+								<p class="description" style="margin:8px 0 0;">
+									<code>data-product-id</code> is optional on the button. The TargetWeb API still <strong>requires</strong> an <code>externalProductId</code>, so set a Default product ID below for homepage / non-product pages.
+								</p>
+							</div>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="tw_crm_default_product_id">Default product ID</label></th>
+						<td>
+							<input type="text" class="regular-text" id="tw_crm_default_product_id" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[default_product_id]" value="<?php echo esc_attr( isset( $settings['default_product_id'] ) ? $settings['default_product_id'] : '' ); ?>" placeholder="e.g. 123">
+							<p class="description">
+								Required by the TargetWeb API as <code>externalProductId</code>. Used on the homepage and any page that is not a WooCommerce product.
+								Must be a real product ID the CRM can look up on this store. Leaving it blank is what causes <em>“Object reference not set to an instance of an object.”</em> on homepage submits.
+							</p>
 						</td>
 					</tr>
 					<tr>
@@ -386,7 +514,7 @@ class TW_CRM_Settings {
 				</select>
 				<button type="button" class="button button-secondary" id="tw-crm-test-btn">Test connection</button>
 			</p>
-			<div id="tw-crm-test-result" style="display:none;padding:10px 12px;border-radius:4px;max-width:640px;"></div>
+			<div id="tw-crm-test-result" style="display:none;padding:10px 12px;border-radius:4px;max-width:760px;"></div>
 
 			<script>
 			(function () {
@@ -395,6 +523,51 @@ class TW_CRM_Settings {
 				var resultBox = document.getElementById('tw-crm-test-result');
 				if (!btn) { return; }
 
+				function esc(str) {
+					return String(str == null ? '' : str).replace(/[&<>"']/g, function (c) {
+						return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+					});
+				}
+
+				// Renders the { url, http_code, wp_error_code, wp_error_message, raw_body, ... }
+				// debug payload attached to WP_Error data, so staging/production-only
+				// failures (wrong host, TLS/cert issue, WAF block, different response
+				// shape, etc.) are visible instead of hidden behind a generic message.
+				function renderDebug(title, debug) {
+					if (!debug || typeof debug !== 'object') { return ''; }
+					var rows = [];
+					if (debug.url) { rows.push(['URL called', debug.url]); }
+					if (debug.http_code !== undefined) { rows.push(['HTTP status', debug.http_code]); }
+					if (debug.wp_error_code) { rows.push(['Transport error code', debug.wp_error_code]); }
+					if (debug.wp_error_message) { rows.push(['Transport error message', debug.wp_error_message]); }
+					if (debug.status !== undefined) { rows.push(['Response "status" field', debug.status]); }
+					if (debug.store_url) { rows.push(['store-url header sent', debug.store_url]); }
+					if (debug.base_url) { rows.push(['Base URL', debug.base_url]); }
+					if (debug.environment) { rows.push(['Environment', debug.environment]); }
+					if (!rows.length && !debug.raw_body) { return ''; }
+
+					var html = '<details style="margin-top:8px;" open><summary style="cursor:pointer;font-weight:600;">' + esc(title) + '</summary>';
+					html += '<table style="width:100%;margin-top:6px;font-size:12px;border-collapse:collapse;">';
+					rows.forEach(function (r) {
+						html += '<tr><td style="padding:3px 8px;color:#646970;white-space:nowrap;vertical-align:top;">' + esc(r[0]) + '</td>' +
+							'<td style="padding:3px 8px;word-break:break-all;"><code>' + esc(r[1]) + '</code></td></tr>';
+					});
+					html += '</table>';
+					if (debug.raw_body) {
+						html += '<div style="margin-top:6px;color:#646970;font-size:12px;">Raw response body:</div>' +
+							'<pre style="background:#1d2327;color:#f0f0f1;padding:8px;border-radius:3px;overflow:auto;max-height:220px;font-size:12px;white-space:pre-wrap;word-break:break-all;">' + esc(debug.raw_body) + '</pre>';
+					}
+					html += '</details>';
+					return html;
+				}
+
+				function renderEnvironment(env) {
+					if (!env) { return ''; }
+					return '<div style="margin-bottom:8px;font-size:12px;color:#646970;">' +
+						'Tested <strong>' + esc((env.environment || '').toUpperCase()) + '</strong> — Base URL: <code>' + esc(env.baseUrl || '(not set)') + '</code>' +
+						' — store-url: <code>' + esc(env.storeUrl || '(not set)') + '</code></div>';
+				}
+
 				btn.addEventListener('click', function () {
 					btn.disabled = true;
 					btn.textContent = 'Testing…';
@@ -402,7 +575,7 @@ class TW_CRM_Settings {
 					resultBox.style.background = '#f6f7f7';
 					resultBox.style.border = '1px solid #dcdcde';
 					resultBox.style.color = '#111';
-					resultBox.textContent = 'Contacting TargetWeb…';
+					resultBox.innerHTML = 'Contacting TargetWeb…';
 
 					var body = new URLSearchParams();
 					body.append('action', 'tw_crm_admin_test_connection');
@@ -412,32 +585,38 @@ class TW_CRM_Settings {
 					fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: body })
 						.then(function (res) { return res.json(); })
 						.then(function (json) {
+							var d = (json && json.data) || {};
+							var html = renderEnvironment(d.environment);
+
 							if (json && json.success) {
-								var d = json.data || {};
 								var lines = ['dmsSetupId: ' + (d.dmsSetupId || '(none)')];
 								if (d.locationsError) {
-									lines.push('Locations: error — ' + d.locationsError);
+									lines.push('Locations: error (' + (d.locationsCode || 'unknown') + ') — ' + d.locationsError);
 								} else if (Array.isArray(d.locations)) {
 									lines.push('Locations found: ' + d.locations.length);
 									d.locations.forEach(function (loc) {
 										lines.push('  • ' + (loc.name || '(unnamed)') + (loc.city ? ' — ' + loc.city + (loc.state ? ', ' + loc.state : '') : ''));
 									});
 								}
-								resultBox.style.background = '#ecfdf5';
-								resultBox.style.border = '1px solid #a7f3d0';
-								resultBox.textContent = lines.join('\n');
-								resultBox.style.whiteSpace = 'pre-line';
+								resultBox.style.background = d.locationsError ? '#fff8e5' : '#ecfdf5';
+								resultBox.style.border = d.locationsError ? '1px solid #f0c33c' : '1px solid #a7f3d0';
+								html += '<pre style="white-space:pre-line;margin:0;font-family:inherit;">' + esc(lines.join('\n')) + '</pre>';
+								if (d.locationsError) {
+									html += renderDebug('GetDmsSetupLocations error details', d.locationsDebug);
+								}
 							} else {
-								var msg = (json && json.data && json.data.message) || 'Connection test failed.';
+								var msg = d.message || 'Connection test failed.';
 								resultBox.style.background = '#fef2f2';
 								resultBox.style.border = '1px solid #fecaca';
-								resultBox.textContent = msg;
+								html += '<div><strong>' + esc(d.errorCode || 'Error') + ':</strong> ' + esc(msg) + '</div>';
+								html += renderDebug('GetDmsSetupId error details', d.debug);
 							}
+							resultBox.innerHTML = html;
 						})
-						.catch(function () {
+						.catch(function (err) {
 							resultBox.style.background = '#fef2f2';
 							resultBox.style.border = '1px solid #fecaca';
-							resultBox.textContent = 'Connection test failed (network error).';
+							resultBox.innerHTML = 'Connection test failed (network/JS error) — ' + esc(err && err.message ? err.message : err);
 						})
 						.finally(function () {
 							btn.disabled = false;

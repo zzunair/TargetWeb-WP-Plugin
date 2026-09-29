@@ -8,10 +8,10 @@
  *   2. GetDmsSetupLocations   (resolved server-side, lazily on first open)
  *   3. AddCustomerQuotation   (on submit)
  *
- * Auto-binds to the existing #tw-request-info-btn button (theme markup keeps
- * working with zero theme changes). If a #tw-crm-popup shell already exists
- * in the DOM (legacy theme markup), it is reused; otherwise the plugin
- * builds its own.
+ * Auto-binds to #tw-request-info-btn (or [data-tw-crm-open]). Modal source
+ * comes from settings:
+ *   - plugin: always build #tw-crm-app-popup (never reuse theme markup)
+ *   - theme:  inject the form into the theme's #tw-crm-popup / #leads-form-div
  */
 (function () {
 	'use strict';
@@ -23,8 +23,37 @@
 		return;
 	}
 
-	var POPUP_ID = 'tw-crm-popup';
-	var FORM_MOUNT_ID = 'leads-form-div';
+	var useInline = cfg.modalSource === 'inline';
+	var useThemeModal = cfg.modalSource === 'theme';
+	var POPUP_ID = cfg.themeModalId || 'tw-crm-popup';
+	var PLUGIN_POPUP_ID = cfg.pluginModalId || 'tw-crm-app-popup';
+	var FORM_MOUNT_ID = cfg.formMountId || 'leads-form-div';
+	var TRIGGER_ID = cfg.triggerId || 'tw-request-info-btn';
+
+	function pageHasTrigger() {
+		return !!(document.getElementById(TRIGGER_ID) || document.querySelector('[data-tw-crm-open]'));
+	}
+
+	function detectDisplayMode() {
+		var popup = document.getElementById(POPUP_ID);
+		var mount = document.getElementById(FORM_MOUNT_ID);
+		var markedInline =
+			(popup && popup.hasAttribute('data-tw-crm-inline')) ||
+			(mount && mount.hasAttribute('data-tw-crm-inline'));
+		// Theme markup wins: a product page can host a simple form even if
+		// settings still say "plugin modal".
+		if (markedInline || cfg.modalSource === 'inline' || (!pageHasTrigger() && (popup || mount))) {
+			return 'inline';
+		}
+		// Theme popup + trigger: the theme owns open/close and design.
+		if (popup && pageHasTrigger()) {
+			return 'theme';
+		}
+		if (cfg.modalSource === 'plugin') {
+			return 'plugin';
+		}
+		return 'theme';
+	}
 
 	var popupEl = null;
 	var panelEl = null;
@@ -46,11 +75,42 @@
 	}
 
 	function ensurePopupShell() {
+		if (useInline) {
+			mountEl = document.getElementById(FORM_MOUNT_ID);
+			popupEl = document.getElementById(POPUP_ID);
+			if (!mountEl && popupEl) {
+				mountEl = document.createElement('div');
+				mountEl.id = FORM_MOUNT_ID;
+				popupEl.appendChild(mountEl);
+			}
+			if (!mountEl) {
+				return false;
+			}
+			panelEl = popupEl || mountEl;
+			return true;
+		}
+
 		popupEl = document.getElementById(POPUP_ID);
 
+		if (useThemeModal) {
+			if (!popupEl) {
+				return false;
+			}
+			panelEl = popupEl.querySelector('.tw-crm-popup__panel') || popupEl;
+			mountEl = document.getElementById(FORM_MOUNT_ID);
+			if (!mountEl) {
+				mountEl = document.createElement('div');
+				mountEl.id = FORM_MOUNT_ID;
+				panelEl.appendChild(mountEl);
+			}
+			return true;
+		}
+
+		// Plugin modal: always use our own shell. Never reuse a theme #tw-crm-popup.
+		popupEl = document.getElementById(PLUGIN_POPUP_ID);
 		if (!popupEl) {
 			popupEl = document.createElement('div');
-			popupEl.id = POPUP_ID;
+			popupEl.id = PLUGIN_POPUP_ID;
 			popupEl.className = 'tw-crm-popup';
 			popupEl.setAttribute('aria-hidden', 'true');
 			popupEl.setAttribute('role', 'dialog');
@@ -61,21 +121,20 @@
 				'<button type="button" class="tw-crm-popup__close" data-tw-crm-close aria-label="' +
 				(t('close', 'Close')) +
 				'"><span aria-hidden="true">&times;</span></button>' +
-				'<div id="' + FORM_MOUNT_ID + '"></div>' +
+				'<div id="tw-crm-app-form"></div>' +
 				'</div>';
 			document.body.appendChild(popupEl);
 		}
 
 		panelEl = popupEl.querySelector('.tw-crm-popup__panel') || popupEl;
-		mountEl = document.getElementById(FORM_MOUNT_ID);
+		mountEl = document.getElementById('tw-crm-app-form');
 
 		if (!mountEl) {
 			mountEl = document.createElement('div');
-			mountEl.id = FORM_MOUNT_ID;
+			mountEl.id = 'tw-crm-app-form';
 			panelEl.appendChild(mountEl);
 		}
 
-		// Legacy theme markup may lack a close button; add one defensively.
 		if (!popupEl.querySelector('[data-tw-crm-close]')) {
 			var closeBtn = document.createElement('button');
 			closeBtn.type = 'button';
@@ -85,6 +144,8 @@
 			closeBtn.innerHTML = '<span aria-hidden="true">&times;</span>';
 			panelEl.insertBefore(closeBtn, panelEl.firstChild);
 		}
+
+		return true;
 	}
 
 	function escapeHtml(str) {
@@ -253,22 +314,32 @@
 			});
 	}
 
+	function resolveProductId(trigger) {
+		return (
+			(trigger && parseInt(trigger.getAttribute('data-product-id'), 10)) ||
+			parseInt(window.targetWebShopifyProductId, 10) ||
+			parseInt(cfg.currentProductId, 10) ||
+			parseInt(cfg.defaultProductId, 10) ||
+			0
+		);
+	}
+
 	function openModal(trigger) {
 		if (!popupEl) {
 			return;
 		}
 
-		currentProductId =
-			(trigger && parseInt(trigger.getAttribute('data-product-id'), 10)) ||
-			parseInt(window.targetWebShopifyProductId, 10) ||
-			parseInt(cfg.currentProductId, 10) ||
-			0;
-
+		currentProductId = resolveProductId(trigger);
 		lastFocusedEl = document.activeElement;
 		popupEl.classList.add('is-open');
-		popupEl.style.display = 'flex';
 		popupEl.setAttribute('aria-hidden', 'false');
-		document.body.classList.add('tw-crm-popup-open');
+
+		// Theme modal: never force display. The theme's own CSS/JS owns
+		// show/hide. Forcing display:flex|none is what breaks theme popups.
+		if (!useThemeModal) {
+			popupEl.style.display = 'flex';
+			document.body.classList.add('tw-crm-popup-open');
+		}
 
 		clearFeedback();
 		clearInvalid();
@@ -283,13 +354,16 @@
 	}
 
 	function closeModal() {
-		if (!popupEl) {
+		if (useInline || !popupEl) {
 			return;
 		}
 		popupEl.classList.remove('is-open');
-		popupEl.style.display = 'none';
 		popupEl.setAttribute('aria-hidden', 'true');
-		document.body.classList.remove('tw-crm-popup-open');
+
+		if (!useThemeModal) {
+			popupEl.style.display = 'none';
+			document.body.classList.remove('tw-crm-popup-open');
+		}
 
 		if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
 			lastFocusedEl.focus();
@@ -350,7 +424,10 @@
 		var body = new FormData();
 		body.append('action', cfg.action || 'tw_crm_submit_lead');
 		body.append('nonce', cfg.nonce || '');
-		body.append('product_id', String(currentProductId || cfg.currentProductId || 0));
+		var productId = currentProductId || cfg.currentProductId || cfg.defaultProductId || 0;
+		if (productId) {
+			body.append('product_id', String(productId));
+		}
 		body.append('first_name', firstNameEl.value.trim());
 		body.append('last_name', lastNameEl ? lastNameEl.value.trim() : '');
 		body.append('email', emailEl.value.trim());
@@ -381,7 +458,9 @@
 				if (result.data && result.data.success) {
 					showFeedback(t('success', 'Thank you! We will be in touch shortly.'), 'success');
 					formEl.reset();
-					setTimeout(closeModal, 1800);
+					if (!useInline && !useThemeModal) {
+						setTimeout(closeModal, 1800);
+					}
 					return;
 				}
 				var msg =
@@ -397,34 +476,70 @@
 			});
 	}
 
+	function findTrigger(el) {
+		if (!el || !el.closest) {
+			return null;
+		}
+		return el.closest('#' + TRIGGER_ID) || el.closest('[data-tw-crm-open]');
+	}
+
 	function init() {
 		if (initialized) {
 			return;
 		}
 		initialized = true;
 
-		ensurePopupShell();
+		var mode = detectDisplayMode();
+		useInline = mode === 'inline';
+		useThemeModal = mode === 'theme';
+
+		if (!ensurePopupShell()) {
+			// Theme-modal mode but the theme never output #tw-crm-popup — stay silent.
+			return;
+		}
+
 		renderForm();
 
-		popupEl.addEventListener('click', function (e) {
-			if (e.target.closest('[data-tw-crm-close]')) {
-				closeModal();
-			}
-		});
+		currentProductId = resolveProductId(null);
+		loadFormDataIfNeeded();
 
-		document.addEventListener('keydown', function (e) {
-			if (e.key === 'Escape' && popupEl.classList.contains('is-open')) {
-				closeModal();
-			}
-		});
+		if (useInline) {
+			return;
+		}
+
+		if (popupEl) {
+			popupEl.addEventListener('click', function (e) {
+				if (e.target.closest('[data-tw-crm-close]')) {
+					closeModal();
+				}
+			});
+		}
+
+		if (!useThemeModal) {
+			document.addEventListener('keydown', function (e) {
+				if (popupEl && e.key === 'Escape' && popupEl.classList.contains('is-open')) {
+					closeModal();
+				}
+			});
+		}
 
 		// Delegated so it keeps working even if the theme re-renders the button.
 		document.addEventListener('click', function (e) {
-			var trigger = e.target.closest('#tw-request-info-btn');
+			var trigger = findTrigger(e.target);
 			if (!trigger) {
 				return;
 			}
+			currentProductId = resolveProductId(trigger);
+			loadFormDataIfNeeded();
+
+			if (useThemeModal) {
+				// Let the theme open/close its own popup. We only capture
+				// the product id and make sure the form/locations are ready.
+				return;
+			}
+
 			e.preventDefault();
+			e.stopPropagation();
 			openModal(trigger);
 		});
 	}

@@ -72,7 +72,7 @@ the lead-form module).
 
 | Module | Folder | What it does |
 |---|---|---|
-| Lead Form | [`modules/lead-form/`](modules/lead-form/README.md) | "Request Information" modal + form on WooCommerce single product pages, submitting to the TargetWeb CRM API (`GetDmsSetupId` / `GetDmsSetupLocations` / `AddCustomerQuotation`). Replaces the theme's old third-party `targetWeb.js` / `displayQuotationForm()` flow. |
+| Lead Form | [`modules/lead-form/`](modules/lead-form/README.md) | "Request Information" modal + form on the homepage, product pages, or any public page, submitting to the TargetWeb CRM API (`GetDmsSetupId` / `GetDmsSetupLocations` / `AddCustomerQuotation`). Replaces the theme's old third-party `targetWeb.js` / `displayQuotationForm()` flow. |
 
 More modules will be added here as they're built — see each module's own
 README for its setup steps and configuration.
