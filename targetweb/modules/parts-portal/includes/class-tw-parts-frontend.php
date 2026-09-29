@@ -85,8 +85,9 @@ class TW_Parts_Frontend {
 			'tw-parts-portal',
 			'twPartsConfig',
 			array(
-				'cartUrl'    => rest_url( 'wc/store/v1/cart' ),
-				'addItemUrl' => rest_url( 'wc/store/v1/cart/add-item' ),
+				'cartUrl'          => rest_url( 'wc/store/v1/cart' ),
+				'addItemUrl'       => rest_url( 'wc/store/v1/cart/add-item' ),
+				'cartFragmentsUrl' => add_query_arg( 'wc-ajax', 'get_refreshed_fragments', home_url( '/' ) ),
 			)
 		);
 	}
