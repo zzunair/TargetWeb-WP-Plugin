@@ -1,8 +1,8 @@
 # Lead Form module ("Request Information")
 
 Part of the [TargetWeb](../../README.md) plugin. Owns the "Request
-Information" modal + lead form on WooCommerce single product pages, and
-submits it to the **real TargetWeb API** described in
+Information" modal + lead form on the homepage, product pages, or any
+public page, and submits it to the **real TargetWeb API** described in
 `WordPress-Integration-API-Reference.doc`. Replaces the theme's third-party
 `targetWeb.js` / `displayQuotationForm()` flow.
 
@@ -46,8 +46,9 @@ settings are saved. Step 3 always calls out fresh.
   a store has more than one configured location (per the API docs, a single
   location is auto-assigned server-side, so the picker is skipped then).
 - Validates on the client and again on the server.
-- Resolves the product's WooCommerce ID server-side as `externalProductId` —
-  never trusts the browser for it.
+- If a WooCommerce product is present, resolves its ID server-side as
+  `externalProductId` — never trusts the browser for it. On the homepage
+  or any non-product page the field is omitted and the lead still submits.
 - Resolves `dmsSetupId` server-side from the configured store domain —
   never accepts one from the browser.
 - Fails gracefully (with a clear message, both admin-side and in the modal)
@@ -76,10 +77,11 @@ modules/lead-form/
 
 1. **Install the plugin.** Copy/zip the top-level `targetweb` folder into
    `wp-content/plugins/` and activate **TargetWeb** in WP Admin → Plugins —
-   this module loads automatically as part of it. (Requires WooCommerce
-   active; the frontend button/modal simply won't render otherwise.)
+   this module loads automatically as part of it. WooCommerce is optional;
+   the form works on the homepage without product pages.
 
-2. **Open settings.** Go to **Products → TargetWeb CRM** in wp-admin.
+2. **Open settings.** Go to **Products → TargetWeb CRM** in wp-admin
+   (or **Settings → TargetWeb CRM** if WooCommerce is not installed).
 
 3. **Enable the feature.** Check *Enable feature*. This is on by default.
 
@@ -123,6 +125,24 @@ modules/lead-form/
    resolved `dmsSetupId` and location list right in wp-admin. Use this to
    verify a Base URL + store domain combination before testing the frontend.
 
+   On failure, it also shows an **expandable "error details" panel** with
+   the exact URL that was called, the HTTP status code, the raw response
+   body, and — if the request never reached the server at all — the
+   underlying transport/cURL error (e.g. DNS failure, TLS/certificate
+   problem, timeout, connection refused). This is what to check first when
+   a given environment (e.g. staging or production) fails while another
+   (e.g. QA) works: it usually points at one of:
+   - **No/blank Base URL** for that specific environment (shown right in
+     the result — double check you saved the URL for *that* environment,
+     not just the active one).
+   - **A different host/IP being blocked** by a firewall or WAF on the API
+     side — look for a transport error rather than an HTTP status.
+   - **TLS/SSL certificate issues** on that environment's host — shows up
+     as a `cURL error 60` transport message.
+   - **A non-JSON or unexpected response body** (e.g. an HTML error page
+     from a load balancer/WAF instead of the API's JSON) — visible in the
+     raw response body panel.
+
 8. **(Optional) CTA text, phone requirement, debug logging.** Adjust as
    needed. Debug logging only ever writes to the PHP error log outside of
    the `production` environment, even if left on.
@@ -133,11 +153,44 @@ modules/lead-form/
 
 ## Using the button
 
-- **If the theme already renders `#tw-request-info-btn`** (current setup):
-  nothing to do — the plugin auto-binds to it via a delegated click
-  listener and shows its own modal.
-- **If you want the plugin to render the button itself** (e.g. once the
-  theme drops its copy), use either:
+### Theme modal (popup)
+
+Put this id on the button that opens the form:
+
+```html
+<button type="button" id="tw-request-info-btn" data-product-id="123">Request Information</button>
+```
+
+And this popup shell in the theme (TargetWeb-WP-Theme uses a designed version of this):
+
+```html
+<div id="tw-crm-popup">
+  <div id="leads-form-div"></div>
+</div>
+```
+
+`data-tw-crm-open` also works if the button id is already used elsewhere.
+
+### Simple in-page form (no popup)
+
+Homepage / lead-gen themes (e.g. Lead-Gen-1) and product themes that keep
+the form on the page (e.g. Virtual-showroom) should omit the button and
+mark the mount as inline:
+
+```html
+<div id="tw-crm-popup" data-tw-crm-inline>
+  <div id="leads-form-div"></div>
+</div>
+```
+
+Or output it with `[tw_crm_lead_form]` / `do_action( 'tw_crm_render_form' )`.
+If there is no `#tw-request-info-btn`, the plugin auto-detects the simple form.
+
+- **Plugin modal** (default): the plugin builds `#tw-crm-app-popup` and
+  never reuses theme markup.
+- **Theme**: pick this on **Products → TargetWeb CRM**. Works for both a
+  theme popup and a simple in-page form.
+- **If you want the plugin to render the button itself**, use either:
   - Shortcode: `[tw_crm_request_info_button]`
   - Template code: `do_action( 'tw_crm_render_button' );`
 
@@ -198,9 +251,8 @@ there's exactly one (TargetWeb auto-assigns it) or zero.
   for missing headers.
 - All JS is defensive: missing DOM nodes (e.g. no `#tw-crm-popup`, no
   `#tw-request-info-btn` on a given page) never throw.
-- The plugin only loads its assets/modal on WooCommerce single product
-  pages, and only when both WooCommerce is active and the feature is
-  enabled.
+- The plugin loads its assets on public frontend pages (homepage included)
+  whenever the feature is enabled. Missing DOM nodes never throw.
 - All output is escaped; all input is sanitized/validated server-side
   regardless of client-side checks.
 - `dmsSetupId` and the location list are cached via transients and never

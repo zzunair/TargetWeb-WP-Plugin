@@ -104,14 +104,14 @@ class TW_CRM_Ajax {
 		// API docs: phone is "digits only, no formatting needed" — normalize.
 		$phone_digits = preg_replace( '/\D+/', '', $phone_raw );
 
-		// ---- Resolve product server-side; never trust client for title/etc ----
+		// ---- Product is optional (homepage / non-product themes) ----
+		// If a product id is sent, resolve it server-side and never trust
+		// client-supplied title/etc. If none is sent (or it isn't a product),
+		// submit without externalProductId.
 		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
-		if ( $product_id <= 0 || 'product' !== get_post_type( $product_id ) ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid product.', 'targetweb' ) ), 422 );
-		}
-		$product = function_exists( 'wc_get_product' ) ? wc_get_product( $product_id ) : null;
-		if ( ! $product ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid product.', 'targetweb' ) ), 422 );
+		$product    = null;
+		if ( $product_id > 0 && 'product' === get_post_type( $product_id ) && function_exists( 'wc_get_product' ) ) {
+			$product = wc_get_product( $product_id );
 		}
 
 		if ( ! TW_CRM_Settings::is_active_endpoint_configured() ) {
@@ -127,6 +127,37 @@ class TW_CRM_Ajax {
 		}
 
 		// ---- Build the AddCustomerQuotation payload ----
+		$external_product_id = TW_CRM_Settings::resolve_external_product_id( $product );
+		if ( '' === $external_product_id ) {
+			TW_CRM_Logger::log( 'Submit blocked: missing externalProductId for a non-product page.' );
+			wp_send_json_error(
+				array(
+					'message' => __( 'This form is missing a Default product ID. Set one under TargetWeb CRM settings (required by the CRM on homepage / non-product pages).', 'targetweb' ),
+				),
+				422
+			);
+		}
+
+		// Always send dmsLocationId when we have locations — omitting it on
+		// some environments makes the CRM throw a NullReferenceException.
+		$locations = TW_CRM_Api::get_dms_setup_locations( $dms_setup_id );
+		if ( ! is_wp_error( $locations ) && ! empty( $locations ) ) {
+			$valid_ids = array();
+			$fallback  = '';
+			foreach ( $locations as $loc ) {
+				if ( empty( $loc['id'] ) ) {
+					continue;
+				}
+				$valid_ids[] = $loc['id'];
+				if ( '' === $fallback || ! empty( $loc['isDefault'] ) ) {
+					$fallback = $loc['id'];
+				}
+			}
+			if ( '' === $location_id || ! in_array( $location_id, $valid_ids, true ) ) {
+				$location_id = $fallback;
+			}
+		}
+
 		$payload = array(
 			'firstName'         => $first_name,
 			'lastName'          => $last_name,
@@ -134,7 +165,7 @@ class TW_CRM_Ajax {
 			'phone'             => $phone_digits,
 			'message'           => $message,
 			'dmsSetupId'        => $dms_setup_id,
-			'externalProductId' => (string) $product->get_id(),
+			'externalProductId' => $external_product_id,
 		);
 		if ( '' !== $location_id ) {
 			$payload['dmsLocationId'] = $location_id;
@@ -143,9 +174,9 @@ class TW_CRM_Ajax {
 		/**
 		 * Filter the outgoing AddCustomerQuotation payload just before it is sent.
 		 *
-		 * @param array   $payload Payload data.
-		 * @param WC_Product $product Resolved product.
-		 * @param array   $settings Full plugin settings.
+		 * @param array           $payload  Payload data.
+		 * @param WC_Product|null $product  Resolved product, or null on non-product pages.
+		 * @param array           $settings Full plugin settings.
 		 */
 		$payload = apply_filters( 'tw_crm_lead_payload', $payload, $product, $settings );
 
@@ -164,9 +195,15 @@ class TW_CRM_Ajax {
 	/**
 	 * Admin-only: exercise GetDmsSetupId (+ GetDmsSetupLocations) for the
 	 * settings page's "Test connection" button. Always bypasses the cache.
+	 *
+	 * Unlike the customer-facing handlers above, this one is allowed to leak
+	 * full diagnostic detail (attempted URL, HTTP status, raw response body,
+	 * transport/cURL error) in the response — it's admin-only and exists
+	 * specifically to debug environment-specific failures (e.g. works on QA,
+	 * fails on staging/production because of a different host, cert, or WAF).
 	 */
 	public static function handle_admin_test_connection() {
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! current_user_can( TW_CRM_Settings::capability() ) ) {
 			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'targetweb' ) ), 403 );
 		}
 		check_ajax_referer( 'tw_crm_admin_test', 'nonce' );
@@ -176,17 +213,35 @@ class TW_CRM_Ajax {
 			$env = TW_CRM_Settings::get_active_environment();
 		}
 
+		$config      = TW_CRM_Settings::get_environment_config( $env );
+		$settings    = TW_CRM_Settings::get_settings();
+		$environment = array(
+			'environment' => $env,
+			'baseUrl'     => $config['base_url'],
+			'storeUrl'    => $settings['shop_domain'],
+		);
+
 		$dms_setup_id = TW_CRM_Api::get_dms_setup_id( $env, true );
 		if ( is_wp_error( $dms_setup_id ) ) {
-			wp_send_json_error( array( 'message' => $dms_setup_id->get_error_message() ) );
+			wp_send_json_error(
+				array(
+					'message'     => $dms_setup_id->get_error_message(),
+					'errorCode'   => $dms_setup_id->get_error_code(),
+					'debug'       => $dms_setup_id->get_error_data(),
+					'environment' => $environment,
+				)
+			);
 		}
 
 		$locations = TW_CRM_Api::get_dms_setup_locations( $dms_setup_id, $env, true );
 		if ( is_wp_error( $locations ) ) {
 			wp_send_json_success(
 				array(
-					'dmsSetupId'     => $dms_setup_id,
-					'locationsError' => $locations->get_error_message(),
+					'dmsSetupId'      => $dms_setup_id,
+					'locationsError'  => $locations->get_error_message(),
+					'locationsCode'   => $locations->get_error_code(),
+					'locationsDebug'  => $locations->get_error_data(),
+					'environment'     => $environment,
 				)
 			);
 			return;
@@ -194,8 +249,9 @@ class TW_CRM_Ajax {
 
 		wp_send_json_success(
 			array(
-				'dmsSetupId' => $dms_setup_id,
-				'locations'  => $locations,
+				'dmsSetupId'  => $dms_setup_id,
+				'locations'   => $locations,
+				'environment' => $environment,
 			)
 		);
 	}

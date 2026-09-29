@@ -1,6 +1,6 @@
 /* TargetWeb CRM — Request Information modal + form */
 
-#tw-crm-popup,
+#tw-crm-app-popup,
 .tw-crm-popup {
 	display: none;
 	position: fixed;
@@ -12,9 +12,29 @@
 	box-sizing: border-box;
 }
 
-#tw-crm-popup.is-open,
+#tw-crm-app-popup.is-open,
 .tw-crm-popup.is-open {
 	display: flex;
+}
+
+/* Theme-hosted simple form (product page / lead-gen). Never treat as a popup. */
+#tw-crm-popup[data-tw-crm-inline],
+[data-tw-crm-inline] {
+	display: block;
+	position: static;
+	inset: auto;
+	z-index: auto;
+	padding: 0;
+	align-items: stretch;
+	justify-content: flex-start;
+	max-width: none;
+	background: transparent;
+	box-shadow: none;
+}
+
+#tw-crm-popup[data-tw-crm-inline] .tw-crm-popup__close,
+[data-tw-crm-inline] .tw-crm-popup__close {
+	display: none;
 }
 
 .tw-crm-popup__overlay {

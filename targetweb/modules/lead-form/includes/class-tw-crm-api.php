@@ -54,6 +54,36 @@ class TW_CRM_Api {
 	}
 
 	/**
+	 * Build a consistent diagnostic payload for a WP_Error's data — never
+	 * shown to end customers, but surfaced by the admin "Test connection"
+	 * tool so staging/production-only failures (wrong host, SSL, WAF,
+	 * different response shape, etc.) can actually be diagnosed instead of
+	 * hidden behind a generic message.
+	 *
+	 * @param string                  $url      The exact URL that was called (or attempted).
+	 * @param array|WP_Error|null     $response wp_remote_post() result, or null if never sent.
+	 * @param array                   $extra    Extra key/value pairs to merge in (e.g. status codes parsed from the body).
+	 * @return array
+	 */
+	private static function debug_data( $url, $response = null, $extra = array() ) {
+		$data = array( 'url' => $url );
+
+		if ( is_wp_error( $response ) ) {
+			// Transport-level failure — DNS, TLS/SSL, timeout, connection refused, etc.
+			// This is exactly the detail that differs between environments (e.g. a
+			// staging host with a bad/self-signed cert, or a firewall/WAF blocking
+			// only that server's outbound IP) and is otherwise swallowed.
+			$data['wp_error_code']    = $response->get_error_code();
+			$data['wp_error_message'] = $response->get_error_message();
+		} elseif ( null !== $response ) {
+			$data['http_code'] = (int) wp_remote_retrieve_response_code( $response );
+			$data['raw_body']  = mb_substr( (string) wp_remote_retrieve_body( $response ), 0, 1500 );
+		}
+
+		return array_merge( $data, $extra );
+	}
+
+	/**
 	 * Step 1: resolve the configured store domain to a dmsSetupId GUID.
 	 * Cached per environment + store domain, since it rarely changes.
 	 *
@@ -69,10 +99,18 @@ class TW_CRM_Api {
 		$store_url = trim( (string) $settings['shop_domain'] );
 
 		if ( '' === $base_url ) {
-			return new WP_Error( 'tw_crm_no_base_url', __( 'No Base URL is configured for this environment yet.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_no_base_url',
+				__( 'No Base URL is configured for this environment yet.', 'targetweb' ),
+				array( 'environment' => $env )
+			);
 		}
 		if ( '' === $store_url ) {
-			return new WP_Error( 'tw_crm_no_store_url', __( 'Store identifier / shop domain is not configured yet.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_no_store_url',
+				__( 'Store identifier / shop domain is not configured yet.', 'targetweb' ),
+				array( 'environment' => $env, 'base_url' => $base_url )
+			);
 		}
 
 		$cache_key = 'tw_crm_setup_id_' . md5( $env . '|' . $store_url );
@@ -99,14 +137,23 @@ class TW_CRM_Api {
 
 		if ( is_wp_error( $response ) ) {
 			TW_CRM_Logger::log( 'GetDmsSetupId transport error', array( 'url' => $url, 'error' => $response->get_error_message() ) );
-			return new WP_Error( 'tw_crm_transport', __( 'Could not reach the CRM right now.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_transport',
+				__( 'Could not reach the CRM right now.', 'targetweb' ),
+				self::debug_data( $url, $response )
+			);
 		}
 
 		// PascalCase-only endpoint; Content-Type may say text/plain even for JSON — parse regardless.
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$raw_body = wp_remote_retrieve_body( $response );
+		$body     = json_decode( $raw_body, true );
 		if ( ! is_array( $body ) ) {
-			TW_CRM_Logger::log( 'GetDmsSetupId unparseable response', array( 'url' => $url, 'raw' => wp_remote_retrieve_body( $response ) ) );
-			return new WP_Error( 'tw_crm_bad_response', __( 'Unexpected response while resolving the store setup.', 'targetweb' ) );
+			TW_CRM_Logger::log( 'GetDmsSetupId unparseable response', array( 'url' => $url, 'raw' => $raw_body ) );
+			return new WP_Error(
+				'tw_crm_bad_response',
+				__( 'Unexpected response while resolving the store setup.', 'targetweb' ),
+				self::debug_data( $url, $response )
+			);
 		}
 
 		$status  = isset( $body['Status'] ) ? (int) $body['Status'] : 0;
@@ -123,7 +170,7 @@ class TW_CRM_Api {
 		return new WP_Error(
 			'tw_crm_setup_not_found',
 			$message ? $message : __( 'No TargetWeb setup was found for this store.', 'targetweb' ),
-			array( 'status' => $status )
+			self::debug_data( $url, $response, array( 'status' => $status, 'store_url' => $store_url ) )
 		);
 	}
 
@@ -143,10 +190,14 @@ class TW_CRM_Api {
 		$dms_setup_id = trim( (string) $dms_setup_id );
 
 		if ( '' === $dms_setup_id ) {
-			return new WP_Error( 'tw_crm_no_setup_id', __( 'Missing dmsSetupId.', 'targetweb' ) );
+			return new WP_Error( 'tw_crm_no_setup_id', __( 'Missing dmsSetupId.', 'targetweb' ), array( 'environment' => $env ) );
 		}
 		if ( '' === $base_url ) {
-			return new WP_Error( 'tw_crm_no_base_url', __( 'No Base URL is configured for this environment yet.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_no_base_url',
+				__( 'No Base URL is configured for this environment yet.', 'targetweb' ),
+				array( 'environment' => $env )
+			);
 		}
 
 		$cache_key = 'tw_crm_locations_' . md5( $env . '|' . $dms_setup_id );
@@ -173,7 +224,11 @@ class TW_CRM_Api {
 
 		if ( is_wp_error( $response ) ) {
 			TW_CRM_Logger::log( 'GetDmsSetupLocations transport error', array( 'url' => $url, 'error' => $response->get_error_message() ) );
-			return new WP_Error( 'tw_crm_transport', __( 'Could not load store locations right now.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_transport',
+				__( 'Could not load store locations right now.', 'targetweb' ),
+				self::debug_data( $url, $response )
+			);
 		}
 
 		// status is always 0 here per the API reference — success/failure is signaled by HTTP code only.
@@ -182,7 +237,11 @@ class TW_CRM_Api {
 
 		if ( $code < 200 || $code >= 300 || ! is_array( $body ) ) {
 			TW_CRM_Logger::log( 'GetDmsSetupLocations bad response', array( 'url' => $url, 'code' => $code ) );
-			return new WP_Error( 'tw_crm_locations_error', __( 'Could not load store locations right now.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_locations_error',
+				__( 'Could not load store locations right now.', 'targetweb' ),
+				self::debug_data( $url, $response )
+			);
 		}
 
 		$raw_list  = isset( $body['entityList'] ) && is_array( $body['entityList'] ) ? $body['entityList'] : array();
@@ -220,7 +279,11 @@ class TW_CRM_Api {
 		$base_url = trim( (string) $config['base_url'] );
 
 		if ( '' === $base_url ) {
-			return new WP_Error( 'tw_crm_no_base_url', __( 'No Base URL is configured for this environment yet.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_no_base_url',
+				__( 'No Base URL is configured for this environment yet.', 'targetweb' ),
+				array( 'environment' => $env )
+			);
 		}
 
 		$url = self::build_url( $base_url, self::ROUTE_ADD_CUSTOMER_QUOTATION );
@@ -251,32 +314,36 @@ class TW_CRM_Api {
 
 		if ( is_wp_error( $response ) ) {
 			TW_CRM_Logger::log( 'AddCustomerQuotation transport error', array( 'error' => $response->get_error_message() ) );
-			return new WP_Error( 'tw_crm_transport', __( 'We could not reach the CRM right now. Please try again shortly.', 'targetweb' ) );
+			return new WP_Error(
+				'tw_crm_transport',
+				__( 'We could not reach the CRM right now. Please try again shortly.', 'targetweb' ),
+				self::debug_data( $url, $response )
+			);
 		}
 
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		TW_CRM_Logger::log( 'AddCustomerQuotation response', array( 'code' => $code, 'body' => $body ) );
-
+		$raw_body    = (string) wp_remote_retrieve_body( $response );
+		$code        = (int) wp_remote_retrieve_response_code( $response );
+		$body        = json_decode( $raw_body, true );
 		$body_status = is_array( $body ) && isset( $body['status'] ) ? (int) $body['status'] : $code;
 
-		if ( $code >= 200 && $code < 300 && 200 === $body_status ) {
-			$message = ( is_array( $body ) && ! empty( $body['message'] ) )
-				? (string) $body['message']
-				: __( 'Quotation Added Successfully', 'targetweb' );
-			return array( 'message' => $message );
-		}
+		TW_CRM_Logger::log( 'AddCustomerQuotation response', array( 'code' => $code, 'body' => $body, 'raw' => mb_substr( $raw_body, 0, 1500 ) ) );
 
-		$message = '';
+		$accepted = ( $code >= 200 && $code < 300 && 200 === $body_status );
+		$message  = '';
 		if ( is_array( $body ) ) {
 			$message = ! empty( $body['errorMessage'] ) ? (string) $body['errorMessage'] : ( ! empty( $body['message'] ) ? (string) $body['message'] : '' );
+		}
+
+		if ( $accepted ) {
+			return array(
+				'message' => $message ? $message : __( 'Quotation Added Successfully', 'targetweb' ),
+			);
 		}
 
 		return new WP_Error(
 			'tw_crm_quotation_failed',
 			$message ? $message : __( 'Sorry, your request could not be submitted. Please try again shortly.', 'targetweb' ),
-			array( 'status' => $body_status, 'http_code' => $code )
+			self::debug_data( $url, $response, array( 'status' => $body_status, 'http_code' => $code ) )
 		);
 	}
 }
