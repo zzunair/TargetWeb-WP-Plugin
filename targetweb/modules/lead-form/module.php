@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TW_CRM_VERSION', '1.4.0' );
+define( 'TW_CRM_VERSION', '1.4.1' );
 define( 'TW_CRM_FILE', __FILE__ );
 define( 'TW_CRM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TW_CRM_URL', plugin_dir_url( __FILE__ ) );

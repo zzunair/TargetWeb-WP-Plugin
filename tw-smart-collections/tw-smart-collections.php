@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TW Smart Collections
  * Description: Shopify-style smart collections for WooCommerce. Define condition rules (price, stock, tag, brand, etc.) and products are auto-assigned to a category. Membership is kept current via product-save hooks and a scheduled cron re-evaluation.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Zivo Digitals
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce

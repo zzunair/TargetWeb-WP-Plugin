@@ -122,7 +122,7 @@ class TW_CRM_Settings {
 	 * can lock the production Base URL outside the database if desired.
 	 *
 	 * TODO: once real Base URLs are provided, either paste them into the
-	 * settings screen (Products > TargetWeb CRM) or define the matching
+	 * settings screen (Products > TargetWeb) or define the matching
 	 * constant below in wp-config.php, e.g.:
 	 *   define( 'TW_CRM_PRODUCTION_BASE_URL', 'https://api.example.com' );
 	 *
@@ -219,8 +219,8 @@ class TW_CRM_Settings {
 		if ( post_type_exists( 'product' ) ) {
 			add_submenu_page(
 				'edit.php?post_type=product',
-				'TargetWeb CRM',
-				'TargetWeb CRM',
+				'TargetWeb',
+				'TargetWeb',
 				$cap,
 				'tw-crm-settings',
 				array( __CLASS__, 'render_page' )
@@ -229,8 +229,8 @@ class TW_CRM_Settings {
 		}
 
 		add_options_page(
-			'TargetWeb CRM',
-			'TargetWeb CRM',
+			'TargetWeb',
+			'TargetWeb',
 			$cap,
 			'tw-crm-settings',
 			array( __CLASS__, 'render_page' )
@@ -316,7 +316,7 @@ class TW_CRM_Settings {
 		$active_config = self::get_environment_config( $active_env );
 		?>
 		<div class="wrap">
-			<h1>TargetWeb CRM — Request Information Lead Form</h1>
+			<h1>TargetWeb — Request Information Lead Form</h1>
 			<p>Configures the “Request Information” modal on the homepage, product pages, or any public page that includes the trigger button. Binds to <code>#tw-request-info-btn</code> — no theme changes required if that id is already present.</p>
 
 			<div class="notice notice-info" style="padding:10px 12px;">

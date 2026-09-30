@@ -80,8 +80,8 @@ modules/lead-form/
    this module loads automatically as part of it. WooCommerce is optional;
    the form works on the homepage without product pages.
 
-2. **Open settings.** Go to **Products → TargetWeb CRM** in wp-admin
-   (or **Settings → TargetWeb CRM** if WooCommerce is not installed).
+2. **Open settings.** Go to **Products → TargetWeb** in wp-admin
+   (or **Settings → TargetWeb** if WooCommerce is not installed).
 
 3. **Enable the feature.** Check *Enable feature*. This is on by default.
 
@@ -188,7 +188,7 @@ If there is no `#tw-request-info-btn`, the plugin auto-detects the simple form.
 
 - **Plugin modal** (default): the plugin builds `#tw-crm-app-popup` and
   never reuses theme markup.
-- **Theme**: pick this on **Products → TargetWeb CRM**. Works for both a
+- **Theme**: pick this on **Products → TargetWeb**. Works for both a
   theme popup and a simple in-page form.
 - **If you want the plugin to render the button itself**, use either:
   - Shortcode: `[tw_crm_request_info_button]`
@@ -212,7 +212,7 @@ Once this plugin is active and verified, the theme can drop its duplicates:
    plugin builds an equivalent shell automatically if it's missing.
 5. Optionally stop rendering the theme's own CTA button and switch to
    `do_action( 'tw_crm_render_button' )` (or the shortcode) so CTA text/
-   visibility is controlled from **Products → TargetWeb CRM** instead of the
+   visibility is controlled from **Products → TargetWeb** instead of the
    Customizer.
 6. The `targetcrm_shop_domain` Customizer setting can be removed once the
    *Store identifier* field on the plugin's settings page has a value saved

@@ -1,5 +1,5 @@
 /**
- * TargetWeb CRM — Request Information modal.
+ * TargetWeb — Request Information modal.
  *
  * Owns the full open/close + form + submit flow. Does NOT load targetWeb.js
  * and does NOT call displayQuotationForm() — this plugin renders and submits

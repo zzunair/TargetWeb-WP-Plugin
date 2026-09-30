@@ -132,7 +132,7 @@ class TW_CRM_Ajax {
 			TW_CRM_Logger::log( 'Submit blocked: missing externalProductId for a non-product page.' );
 			wp_send_json_error(
 				array(
-					'message' => __( 'This form is missing a Default product ID. Set one under TargetWeb CRM settings (required by the CRM on homepage / non-product pages).', 'targetweb' ),
+					'message' => __( 'This form is missing a Default product ID. Set one under TargetWeb settings (required by the CRM on homepage / non-product pages).', 'targetweb' ),
 				),
 				422
 			);

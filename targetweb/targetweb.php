@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TargetWeb
  * Description: TargetWeb's WordPress/WooCommerce integrations, organized as independent modules (Request Information lead form, and more to come).
- * Version: 1.5.0
+ * Version: 1.5.1
  * Author: TargetWeb
  * Text Domain: targetweb
  * Requires PHP: 7.4
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TW_VERSION', '1.5.0' );
+define( 'TW_VERSION', '1.5.1' );
 define( 'TW_FILE', __FILE__ );
 define( 'TW_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TW_URL', plugin_dir_url( __FILE__ ) );
