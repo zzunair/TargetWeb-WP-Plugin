@@ -317,7 +317,7 @@ class TW_CRM_Settings {
 		?>
 		<div class="wrap">
 			<h1>TargetWeb — Request Information Lead Form</h1>
-			<p>Configures the “Request Information” modal on the homepage, product pages, or any public page that includes the trigger button. Binds to <code>#tw-request-info-btn</code> — no theme changes required if that id is already present.</p>
+			<p>Configures the Request Information form on the homepage, product pages, or any public page. If the theme already uses the IDs below, you do not need to add them again.</p>
 
 			<div class="notice notice-info" style="padding:10px 12px;">
 				<p style="margin:0;">
@@ -381,50 +381,45 @@ class TW_CRM_Settings {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row">Modal source</th>
+						<th scope="row">How the form appears</th>
 						<td>
 							<fieldset>
-								<label style="display:block;margin-bottom:6px;">
+								<label style="display:block;margin-bottom:8px;">
 									<input type="radio" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[modal_source]" value="plugin" <?php checked( $settings['modal_source'], 'plugin' ); ?>>
-									Use the <strong>plugin modal</strong> (built and styled by this plugin)
+									<strong>Plugin popup</strong> — this plugin builds and styles its own popup. The theme only needs the Request Information button.
 								</label>
-								<label style="display:block;margin-bottom:6px;">
+								<label style="display:block;margin-bottom:8px;">
 									<input type="radio" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[modal_source]" value="theme" <?php checked( $settings['modal_source'], 'theme' ); ?>>
-									Use the <strong>theme</strong> (plugin injects the form; theme may show it as a modal <em>or</em> as a simple in-page form)
+									<strong>Theme popup</strong> — the theme already has a popup. This plugin only puts the form fields inside <code>#<?php echo esc_html( TW_CRM_FORM_MOUNT_ID ); ?></code>. The theme keeps its own design and open/close.
 								</label>
 								<label style="display:block;">
 									<input type="radio" name="<?php echo esc_attr( TW_CRM_OPTION ); ?>[modal_source]" value="inline" <?php checked( $settings['modal_source'], 'inline' ); ?>>
-									Force <strong>simple in-page form</strong> (never treat it as a popup)
+									<strong>In-page form</strong> — no popup. The form sits on the page (or is output with a shortcode).
 								</label>
 							</fieldset>
 							<div class="notice notice-info inline" style="margin:12px 0 0;padding:10px 12px;">
-								<p style="margin:0 0 8px;"><strong>Theme hook IDs</strong> — add these to any theme to link the form:</p>
-								<ol style="margin:0 0 0 1.3em;">
-									<li>
-										Put this id on the button that should open the form:
-										<code><?php echo esc_html( TW_CRM_TRIGGER_ID ); ?></code>
-										<pre style="background:#f6f7f7;padding:8px 10px;margin:6px 0 10px;overflow:auto;">&lt;button type="button" id="<?php echo esc_html( TW_CRM_TRIGGER_ID ); ?>" data-product-id="123"&gt;Request Information&lt;/button&gt;</pre>
-									</li>
-									<li>
-										Optional: any element with <code>data-tw-crm-open</code> also opens the form (useful if you already used the id elsewhere).
-									</li>
-									<li>
-										<strong>Theme modal:</strong> keep the button above, plus this popup shell:
-										<pre style="background:#f6f7f7;padding:8px 10px;margin:6px 0 10px;overflow:auto;">&lt;div id="<?php echo esc_html( TW_CRM_THEME_MODAL_ID ); ?>"&gt;
+								<p style="margin:0 0 10px;"><strong>What to add in the theme</strong> — skip any piece the theme already has.</p>
+
+								<p style="margin:0 0 4px;"><strong>1. Plugin popup</strong> — button only:</p>
+								<pre style="background:#f6f7f7;padding:8px 10px;margin:0 0 12px;overflow:auto;">&lt;button type="button" id="<?php echo esc_html( TW_CRM_TRIGGER_ID ); ?>" data-product-id="123"&gt;Request Information&lt;/button&gt;</pre>
+
+								<p style="margin:0 0 4px;"><strong>2. Theme popup</strong> — the same button, plus an empty popup. The form is injected into <code>#<?php echo esc_html( TW_CRM_FORM_MOUNT_ID ); ?></code>:</p>
+								<pre style="background:#f6f7f7;padding:8px 10px;margin:0 0 12px;overflow:auto;">&lt;button type="button" id="<?php echo esc_html( TW_CRM_TRIGGER_ID ); ?>" data-product-id="123"&gt;Request Information&lt;/button&gt;
+
+&lt;div id="<?php echo esc_html( TW_CRM_THEME_MODAL_ID ); ?>"&gt;
   &lt;div id="<?php echo esc_html( TW_CRM_FORM_MOUNT_ID ); ?>"&gt;&lt;/div&gt;
 &lt;/div&gt;</pre>
-									</li>
-									<li>
-										<strong>Simple in-page form</strong> (no popup — Lead-Gen-1 style): omit the button and add <code>data-tw-crm-inline</code>:
-										<pre style="background:#f6f7f7;padding:8px 10px;margin:6px 0 0;overflow:auto;">&lt;div id="<?php echo esc_html( TW_CRM_THEME_MODAL_ID ); ?>" data-tw-crm-inline&gt;
+
+								<p style="margin:0 0 4px;"><strong>3. In-page form</strong> — no button. Add <code>data-tw-crm-inline</code> so this is never treated as a popup:</p>
+								<pre style="background:#f6f7f7;padding:8px 10px;margin:0 0 8px;overflow:auto;">&lt;div id="<?php echo esc_html( TW_CRM_THEME_MODAL_ID ); ?>" data-tw-crm-inline&gt;
   &lt;div id="<?php echo esc_html( TW_CRM_FORM_MOUNT_ID ); ?>"&gt;&lt;/div&gt;
 &lt;/div&gt;</pre>
-										Or output it with <code>[tw_crm_lead_form]</code> / <code>do_action('tw_crm_render_form')</code>.
-										If there is no trigger button, the plugin auto-detects the simple form.
-									</li>
-								</ol>
-								<p class="description" style="margin:8px 0 0;">
-									<code>data-product-id</code> is optional on the button. The TargetWeb API still <strong>requires</strong> an <code>externalProductId</code>, so set a Default product ID below for homepage / non-product pages.
+								<p class="description" style="margin:0 0 8px;">
+									Or output the form with <code>[tw_crm_lead_form]</code> / <code>do_action('tw_crm_render_form')</code>.
+								</p>
+								<p class="description" style="margin:0;">
+									<code>data-product-id</code> on the button is optional. The TargetWeb API still requires a product ID, so set a Default product ID below for homepage / non-product pages.
+									A second button can use <code>data-tw-crm-open</code> instead of <code>#<?php echo esc_html( TW_CRM_TRIGGER_ID ); ?></code> if that id is already taken.
 								</p>
 							</div>
 						</td>
